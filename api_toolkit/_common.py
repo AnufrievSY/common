@@ -1,4 +1,9 @@
-import json, hashlib
+"""Shared helpers for hash keys and stable argument serialization."""
+
+import hashlib
+import json
+
+__all__ = ["to_hashkey"]
 
 def to_hashkey(**kwargs) -> str:
     """Создает уникальный ключ на основании переданного запроса."""

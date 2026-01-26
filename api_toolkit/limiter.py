@@ -1,85 +1,57 @@
 """
 Redis-based global limiters (concurrency / rate) for sync and async functions.
 
-Зачем это нужно
----------------
-Обычные лимитеры типа `asyncio.Semaphore` или "rate limiter" в памяти работают
-ТОЛЬКО внутри одного процесса Python.
-
-Этот модуль делает лимиты "глобальными":
+Назначение
+----------
+Лимитеры в памяти (например, asyncio.Semaphore) работают только внутри процесса.
+Этот модуль реализует глобальные лимиты через Redis:
 - между потоками
 - между процессами
 - между разными скриптами
-- даже между разными машинами (если Redis общий)
+- между машинами при общем Redis
 
-Как устроено
-------------
+Алгоритм
+--------
 Используется Redis ZSET:
-- member: уникальный `token` (uuid)
-- score: время протухания этого токена (expire_at)
+- member: уникальный token (uuid)
+- score: время протухания токена (expire_at)
 
 Lua-скрипт атомарно:
 1) удаляет протухшие элементы (score <= now)
-2) проверяет текущий размер множества ZCARD
+2) проверяет ZCARD
 3) если мест нет — возвращает 0
-4) если место есть — добавляет токен и ставит EXPIRE на ключ, возвращает 1
+4) если место есть — добавляет токен, ставит EXPIRE, возвращает 1
 
-Важно: отличие concurrency_limit vs rate_limit
----------------------------------------------
-`concurrency_limit`:
-- ограничивает ПАРАЛЛЕЛЬНОЕ выполнение (как semaphore)
-- после завершения функции вручную освобождает слот (zrem token)
+Типы лимита
+-----------
+concurrency_limit:
+- ограничивает параллельное выполнение
+- слот освобождается вручную (zrem token)
 
-`rate_limit`:
-- ограничивает количество запусков "за окно" (скользящее окно)
-- НЕ освобождает слот руками
-- слоты исчезают сами, когда истекает их срок (score <= now)
-
-Примеры
--------
-Sync:
-
-    limiter = concurrency_limit(limit=5, time_out=30)
-
-    @limiter.sync
-    def fetch(*, method, url, headers=None, cookies=None):
-        ...
-
-Async:
-
-    limiter = rate_limit(limit=10, window=60)
-
-    @limiter.aio
-    async def fetch(*, method, url, headers=None, cookies=None):
-        ...
+rate_limit:
+- ограничивает количество запусков за окно
+- слот не освобождается вручную
+- слоты удаляются сами после истечения TTL
 
 Ключи в Redis
 -------------
-Ключ строится от:
-- method, url, headers, cookies
-через `to_hashkey(...)`.
-
-То есть лимит НЕ глобальный вообще на всё, а "на конкретный тип запроса".
+Ключ формируется из method/url/headers/cookies через to_hashkey(...).
+Лимит применяется к конкретному типу запроса.
 
 Параметр poll
 -------------
-Если лимит занят - ждем `poll` секунд и проверяем снова.
+Если лимит занят — ожидание poll секунд и повтор.
 """
 
 import asyncio
 import datetime
 import time
 import uuid
-from dataclasses import dataclass
 from functools import wraps
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 import redis
 from ._common import to_hashkey
-
-# NOTE: пока что сделал тут, может быть когда-то придумаю как вынести его в другое место,
-# чтобы у пользователей была возможность назначить свой Redis
-r = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
 
 # Lua-скрипт: атомарный Redis-лимиттер.
 # Работает как ZSET "слотов", где score = время протухания.
@@ -106,10 +78,6 @@ redis.call('EXPIRE', key, math.ceil(ttl))
 
 return 1
 """
-_acquire_script = r.register_script(LUA)  # регистрация скрипта в Redis
-
-
-@dataclass(frozen=True)
 class _RedisLimiter:
     """
     Базовый Redis-лимитер.
@@ -130,16 +98,39 @@ class _RedisLimiter:
         prefix: Префикс ключа Redis (например "concurrency_limit" / "rate_limit").
         limit: Сколько токенов может быть активным одновременно.
         period: TTL токена в секундах (для concurrency) или окно (для rate).
-        release: Нужно ли вручную освобождать слот после выполнения функции.
-                 True  -> освобождаем (concurrency limiter)
-                 False -> не освобождаем, ждем само-протухание (rate limiter)
+        release: Освобождать слот после выполнения функции.
         poll: Пауза между попытками занять слот.
+        redis_client: Redis клиент (опционально).
+        host: Хост Redis (если redis_client не передан).
+        port: Порт Redis (если redis_client не передан).
+        db: Redis DB (если redis_client не передан).
     """
-    prefix: str
-    limit: int
-    period: int
-    release: bool
-    poll: float = 0.2
+
+    def __init__(
+        self,
+        *,
+        prefix: str,
+        limit: int,
+        period: int,
+        release: bool,
+        poll: float = 0.2,
+        redis_client: Optional[redis.Redis] = None,
+        host: str = "localhost",
+        port: int = 6379,
+        db: int = 0,
+    ) -> None:
+        self.prefix = prefix
+        self.limit = int(limit)
+        self.period = int(period)
+        self.release = bool(release)
+        self.poll = float(poll)
+        self._client = redis_client or redis.Redis(
+            host=host,
+            port=port,
+            db=db,
+            decode_responses=True,
+        )
+        self._acquire_script = self._client.register_script(LUA)
 
     def _key(self, **kwargs) -> str:
         """
@@ -158,7 +149,7 @@ class _RedisLimiter:
     def _acquire_sync(self, key: str, token: str) -> None:
         """Проверка слота, для использования в синхронных функциях."""
         while True:
-            ok = _acquire_script(
+            ok = self._acquire_script(
                 keys=[key],
                 args=[datetime.datetime.now().timestamp(), self.period, self.limit, token],
             )
@@ -170,7 +161,7 @@ class _RedisLimiter:
         """Проверка слота, для использования в асинхронных функциях."""
         while True:
             ok = await asyncio.to_thread(
-                _acquire_script,
+                self._acquire_script,
                 keys=[key],
                 args=[datetime.datetime.now().timestamp(), self.period, self.limit, token],
             )
@@ -181,12 +172,12 @@ class _RedisLimiter:
     def _release_sync(self, key: str, token: str) -> None:
         """Отчистка слота, для использования в синхронных функциях"""
         if self.release:
-            r.zrem(key, token)
+            self._client.zrem(key, token)
 
     async def _release_async(self, key: str, token: str) -> None:
         """Отчистка слота, для использования в асинхронных функциях"""
         if self.release:
-            await asyncio.to_thread(r.zrem, key, token)
+            await asyncio.to_thread(self._client.zrem, key, token)
 
     def sync(self, func: Callable[..., Any]):
         """Декоратор для обычной (sync) функции."""
@@ -227,17 +218,34 @@ class concurrency_limit(_RedisLimiter):
     Args:
         limit: Максимум параллельных выполнений.
         time_out: TTL слота в секундах.
-                  Если процесс упал и не освободил слот — он протухнет сам.
         poll: Задержка между попытками занять слот.
+        redis_client: Redis клиент (опционально).
+        host: Хост Redis (если redis_client не передан).
+        port: Порт Redis (если redis_client не передан).
+        db: Redis DB (если redis_client не передан).
     """
 
-    def __init__(self, limit: int, time_out: int, poll: float = 0.2):
+    def __init__(
+        self,
+        limit: int,
+        time_out: int,
+        poll: float = 0.2,
+        *,
+        redis_client: Optional[redis.Redis] = None,
+        host: str = "localhost",
+        port: int = 6379,
+        db: int = 0,
+    ) -> None:
         super().__init__(
             prefix="concurrency_limit",
-            limit=int(limit),
-            period=int(time_out),
+            limit=limit,
+            period=time_out,
             release=True,
-            poll=float(poll),
+            poll=poll,
+            redis_client=redis_client,
+            host=host,
+            port=port,
+            db=db,
         )
 
 
@@ -251,12 +259,34 @@ class rate_limit(_RedisLimiter):
         limit: Максимум запусков в окне.
         window: Размер окна (сек).
         poll: Задержка между попытками.
+        redis_client: Redis клиент (опционально).
+        host: Хост Redis (если redis_client не передан).
+        port: Порт Redis (если redis_client не передан).
+        db: Redis DB (если redis_client не передан).
     """
-    def __init__(self, limit: int, window: int, poll: float = 0.2):
+
+    def __init__(
+        self,
+        limit: int,
+        window: int,
+        poll: float = 0.2,
+        *,
+        redis_client: Optional[redis.Redis] = None,
+        host: str = "localhost",
+        port: int = 6379,
+        db: int = 0,
+    ) -> None:
         super().__init__(
             prefix="rate_limit",
-            limit=int(limit),
-            period=int(window),
+            limit=limit,
+            period=window,
             release=False,
-            poll=float(poll),
+            poll=poll,
+            redis_client=redis_client,
+            host=host,
+            port=port,
+            db=db,
         )
+
+
+__all__ = ["concurrency_limit", "rate_limit"]
