@@ -1,3 +1,1 @@
-from . import limiter, validator, cache
-
-cache = cache.cache
+from . import limiter
