@@ -1,62 +1,37 @@
 """
-Зачем это нужно
----------------
-Иногда необходимо дергать один и тот же ресурс много раз, а данные там не меняются.
+Redis-based cache decorator for sync and async functions.
 
-Этот модуль даёт декоратор, который:
-- понимает: надо ли реально делать запрос или вернуть прошлый результат
-- хранит результат в Redis, так что кеш переживает перезапуски/вылеты
-- умеет удалять кеш вручную:
+Назначение
+----------
+Модуль предоставляет декоратор, который:
+- решает, выполнять запрос или вернуть закешированный результат
+- хранит результат в Redis (кеш переживает рестарты)
+- удаляет кеш вручную:
   - конкретный запрос
-  - по любым комбинациям параметров (url, method, params, body, headers, ...)
+  - по сочетаниям параметров (url/method/params/body/headers/...)
   - весь кеш по префиксу
-  - всю Redis DB (очень осторожно)
+  - всю Redis DB (осторожно)
 
 Как устроен ключ
 ----------------
-Чтобы можно было удалять кеш по частичным фильтрам, ключ строится из сегментов.
-
-Пример:
+Ключ строится из сегментов для возможности частичной инвалидации:
 cache:my_func:m=<...>:u=<...>:h=<...>:c=<...>:p=<...>:b=<...>:a=<...>:k=<...>
 
 Где:
 - m/u/h/c/p/b = method/url/headers/cookies/params/body (хэши значений)
-- a = args (позиционные аргументы, если используются)
+- a = args (позиционные аргументы)
 - k = прочие kwargs (кроме http-полей)
-
-Если меняется params/body — ключ другой => кеш не конфликтует.
 
 Поведение ttl
 -------------
-- ttl=None            -> кеш отключён, всегда вызываем функцию
-- ttl=float("inf")    -> кеш без срока (без expire)
-- ttl=число (сек)     -> кеш на ttl секунд
+- ttl=None         -> кеш отключён
+- ttl=float("inf") -> кеш без срока
+- ttl=число        -> кеш на N секунд
 
-Про "некорректный запрос"
--------------------------
-- Если функция кидает исключение -> ничего не кешируется (потому что не дошли до записи)
-- Если функция возвращает объект с .status_code >= 400 -> по умолчанию НЕ кешируется
-
-Пример использования
--------------------
-from decorators import cache
-
-@cache(ttl=60).sync
-def get_orders(*, method, url, params=None, json=None, headers=None, cookies=None):
-    ...
-
-@cache(ttl=float("inf")).aio
-async def get_orders_async(*, method, url, params=None, json=None, headers=None, cookies=None):
-    ...
-
-Удаление кеша
--------------
-Кеш можно чистить вручную:
-
-cfg = cache(ttl=60)   # это объект конфигурации
-cfg.clear_prefix()    # удалить весь кеш по префиксу
-cfg.flushdb()         # удалить ВСЮ Redis DB (осторожно!)
-cfg.invalidate(func, url="...", params={...})  # удалить точечно по фильтрам
+Кеширование ошибок
+-----------------
+- Исключение -> результат не кешируется
+- status_code >= 400 -> результат не кешируется
 """
 
 import asyncio
@@ -71,6 +46,8 @@ import pickle
 
 P = ParamSpec("P")
 R = TypeVar("R")
+
+__all__ = ["CacheConfig", "cache"]
 
 _DEFAULT_REDIS_HOST = "localhost"
 _DEFAULT_REDIS_PORT = 6379
@@ -232,7 +209,18 @@ class CacheConfig:
         """Сегмент для SCAN pattern: если value None -> wildcard, иначе хэш."""
         if value is None:
             return f"{name}=*"
-        return f"{name}={to_hashkey(**{name: value})}"
+        field_map = {
+            "m": "method",
+            "u": "url",
+            "h": "headers",
+            "c": "cookies",
+            "p": "params",
+            "b": "body",
+            "a": "args",
+            "k": "other_kwargs",
+        }
+        hash_key = field_map.get(name, name)
+        return f"{name}={to_hashkey(**{hash_key: value})}"
 
     def _scan_delete(self, pattern: str, limit: int = 100_000) -> int:
         """Удаляет ключи по SCAN pattern."""
