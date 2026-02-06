@@ -66,7 +66,7 @@ def test_sync_limit_200_200():
         tasks = {executor.submit(fetch) for _ in range(2)}
         results = {task.result() for task in tasks}
 
-        assert results == {200, 429}
+        assert results == {200, 200}
 
 @pytest.mark.asyncio
 @pytest.mark.http_toolkit
