@@ -3,11 +3,70 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # Поднимаем корень проекта
 
 import pytest
-import asyncio
-from httpx import AsyncClient
-from http_toolkit import limiter
 import allure
+
+from httpx import AsyncClient
 from httpx._transports.asgi import ASGITransport
+from fastapi.testclient import TestClient
+from concurrent.futures import ThreadPoolExecutor
+
+import asyncio
+
+from http_toolkit import limiter
+from tests.http_toolkit.fixtures import app
+
+@pytest.mark.http_toolkit
+@pytest.mark.limiter
+@pytest.mark.concurrency_limit
+@allure.parent_suite("HTTP Toolkit")
+@allure.epic("Лимитер")
+@allure.label("feature", "Параллельные запросы")
+@allure.title("Лимит синхронных параллельных запросов [200, 429]")
+@allure.description(
+    "Тест проверяет, что при превышении установленных "
+    "лимитов параллельных запросов совершенных синхронной функции "
+    "возвращается код 429"
+)
+def test_sync_limit_200_429():
+    client = TestClient(app)
+
+    @limiter.concurrency_limit(limit=10)
+    def fetch():
+        resp = client.get("/sync_test")
+        return resp.status_code
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        tasks = {executor.submit(fetch) for _ in range(2)}
+        results = {task.result() for task in tasks}
+
+        assert results == {200, 429}
+
+
+@pytest.mark.http_toolkit
+@pytest.mark.limiter
+@pytest.mark.concurrency_limit
+@allure.parent_suite("HTTP Toolkit")
+@allure.epic("Лимитер")
+@allure.label("feature", "Параллельные запросы")
+@allure.title("Лимит синхронных параллельных запросов [200, 200]")
+@allure.description(
+    "Тест проверяет, что даже при ограничении 1 параллельный запрос "
+    "совершенных синхронной функцией лимитер корректно отрабатывает "
+    "возвращая 200 статус"
+)
+def test_sync_limit_200_200():
+    client = TestClient(app)
+
+    @limiter.concurrency_limit(limit=1)
+    def fetch():
+        resp = client.get("/sync_test")
+        return resp.status_code
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        tasks = {executor.submit(fetch) for _ in range(2)}
+        results = {task.result() for task in tasks}
+
+        assert results == {200, 429}
 
 @pytest.mark.asyncio
 @pytest.mark.http_toolkit
@@ -16,21 +75,18 @@ from httpx._transports.asgi import ASGITransport
 @allure.parent_suite("HTTP Toolkit")
 @allure.epic("Лимитер")
 @allure.label("feature", "Параллельные запросы")
-@allure.title("Лимит параллельных запросов [200, 429]")
+@allure.title("Лимит асинхронных параллельных запросов [200, 429]")
 @allure.description(
     "Тест проверяет, что при превышении установленных "
-    "лимитов параллельных запросов возвращается код 429."
+    "лимитов параллельных запросов совершенных асинхронной функцией "
+    "возвращается код 429"
 )
-async def test_limit_200_429():
-    """
-    Тест проверяет работу limiter.concurrency_limit с лимитом 10,
-    ожидается, что один из параллельных запросов вернет 429.
-    """
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+async def test_async_limit_200_429():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://async_test") as client:
 
         @limiter.concurrency_limit(limit=10)
         async def fetch():
-            resp = await client.get("/test")
+            resp = await client.get("/async_test")
             return resp.status_code
 
         t1 = asyncio.create_task(fetch())
@@ -49,21 +105,18 @@ async def test_limit_200_429():
 @allure.parent_suite("HTTP Toolkit")
 @allure.epic("Лимитер")
 @allure.label("feature", "Параллельные запросы")
-@allure.title("Лимит параллельных запросов [200, 200]")
+@allure.title("Лимит асинхронных параллельных запросов [200, 200]")
 @allure.description(
     "Тест проверяет, что даже при ограничении 1 параллельный запрос "
-    "- лимитер корректно пропускает оба запроса (оба вернут 200)."
+    "совершенных асинхронной функцией лимитер корректно отрабатывает "
+    "возвращая 200 статус"
 )
 async def test_limit_200_200():
-    """
-    Тест проверяет работу limiter.concurrency_limit с лимитом 1,
-    оба параллельных запроса должны вернуться 200.
-    """
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://async_test") as client:
 
         @limiter.concurrency_limit(limit=1)
         async def fetch():
-            resp = await client.get("/test")
+            resp = await client.get("/async_test")
             return resp.status_code
 
         t1 = asyncio.create_task(fetch())

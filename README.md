@@ -6,10 +6,10 @@
 ```bash
 # Чистим старые результаты
 Remove-Item -Recurse -Force allure-results
-
-# Запускаем тесты
+```
+```bash
+cp -r allure-report/history allure-results/history
 pytest -v
-
-# Открываем Allure
+allure generate allure-results -o allure-report 
 allure serve allure-results
 ```

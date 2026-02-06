@@ -32,7 +32,7 @@ from functools import wraps
 from typing import Any, Callable
 import inspect
 
-from ._executors import Redis
+from .core import Redis
 
 LUA = """
 local key = KEYS[1]                 -- Redis ключ ZSET, где хранятся активные слоты (str)
@@ -100,17 +100,17 @@ class _BaseLimiter(Redis):
         if self.release:
             await asyncio.to_thread(self.client.zrem, key, token)
 
-    async def wrap(self, func: Callable[..., Any], *args, **kwargs):
-        key = await self.key(**kwargs)
+    def wrap(self, func: Callable[..., Any], *args, **kwargs):
+        key = asyncio.run(self.key(**kwargs))
         token = uuid.uuid4().hex
-        await self._acquire_slot(key, token)
+        asyncio.run(self._acquire_slot(key, token))
         try:
             if inspect.iscoroutinefunction(func):
-                return await func(*args, **kwargs)
+                return asyncio.run(func(*args, **kwargs))
             else:
-                return await asyncio.to_thread(func, *args, **kwargs)
+                return func(*args, **kwargs)
         finally:
-            await self._release_slot(key, token)
+            asyncio.run(self._release_slot(key, token))
 
 
 # Публичные “обертки”
@@ -126,8 +126,8 @@ def concurrency_limit(*, limit: int):
                                 limit=int(limit),
                                 period=1, release=True)
         @wraps(func)
-        async def wrapper(*args, **kwargs):
-            return await _limiter.wrap(func, *args, **kwargs)
+        def wrapper(*args, **kwargs):
+            return _limiter.wrap(func, *args, **kwargs)
         return wrapper
     return decorator
 
@@ -146,7 +146,7 @@ def rate_limit(*, limit: int, period: int):
                                limit=int(limit),
                                period=int(period), release=False)
         @wraps(func)
-        async def wrapper(*args, **kwargs):
-            return await _limiter.wrap(func, *args, **kwargs)
+        def wrapper(*args, **kwargs):
+            return _limiter.wrap(func, *args, **kwargs)
         return wrapper
     return decorator
