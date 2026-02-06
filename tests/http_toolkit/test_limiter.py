@@ -4,39 +4,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # Поднимае
 
 import pytest
 import asyncio
-from fastapi import FastAPI, HTTPException
 from httpx import AsyncClient
 from http_toolkit import limiter
 import allure
 from httpx._transports.asgi import ASGITransport
-
-# -----------------------
-# FastAPI приложение
-# -----------------------
-app = FastAPI()
-semaphore = asyncio.Semaphore(1)
-
-
-@app.get("/test")
-async def _test_endpoint():
-    """
-    Тестовый endpoint, который имитирует лимит параллельных запросов.
-    Если semaphore уже заблокирован, возвращает 429.
-    Иначе выполняет sleep(1) и возвращает 200.
-    """
-    if semaphore.locked():
-        raise HTTPException(429, "Too Many Requests")
-    await semaphore.acquire()
-    try:
-        await asyncio.sleep(1)
-        return {"ok": True}
-    finally:
-        semaphore.release()
-
-
-# =======================
-# Тесты
-# =======================
 
 @pytest.mark.asyncio
 @pytest.mark.http_toolkit
