@@ -100,17 +100,16 @@ class _BaseLimiter(Redis):
         if self.release:
             await asyncio.to_thread(self.client.zrem, key, token)
 
-    def wrap(self, func: Callable[..., Any], *args, **kwargs):
-        key = asyncio.run(self.key(**kwargs))
+    async def wrap(self, func: Callable[..., Any], *args, **kwargs):
+        key = await self.key(**kwargs)
         token = uuid.uuid4().hex
-        asyncio.run(self._acquire_slot(key, token))
+        await self._acquire_slot(key, token)
         try:
             if inspect.iscoroutinefunction(func):
-                return asyncio.run(func(*args, **kwargs))
-            else:
-                return func(*args, **kwargs)
+                return await func(*args, **kwargs)
+            return func(*args, **kwargs)
         finally:
-            asyncio.run(self._release_slot(key, token))
+            await self._release_slot(key, token)
 
 
 # Публичные “обертки”
@@ -125,9 +124,19 @@ def concurrency_limit(*, limit: int):
         _limiter = _BaseLimiter(prefix="concurrency_limit",
                                 limit=int(limit),
                                 period=1, release=True)
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            return _limiter.wrap(func, *args, **kwargs)
+
+        if inspect.iscoroutinefunction(func):
+            @wraps(func)
+            async def wrapper(*args, **kwargs):
+                return await _limiter.wrap(func, *args, **kwargs)
+        else:
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                try:
+                    asyncio.get_running_loop()
+                except RuntimeError:
+                    return asyncio.run(_limiter.wrap(func, *args, **kwargs))
+                raise RuntimeError("Нельзя вызывать синхронный лимитер внутри активного event loop")
         return wrapper
     return decorator
 
