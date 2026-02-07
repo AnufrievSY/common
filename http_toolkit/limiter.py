@@ -101,19 +101,29 @@ class _BaseLimiter(Redis):
         if self.release:
             await asyncio.to_thread(self.client.zrem, key, token)
 
-    def wrap(self, func: Callable[..., Any], *args, **kwargs):
-        def _run():
-            key = asyncio.run(self.key(**kwargs))
-            token = uuid.uuid4().hex
-            asyncio.run(self._acquire_slot(key, token))
-            try:
-                return func(*args, **kwargs)
-            finally:
-                asyncio.run(self._release_slot(key, token))
+    async def execute(self, func: Callable[..., Any], *args, **kwargs):
+        key = await self.key(**kwargs)
+        token = uuid.uuid4().hex
+        await self._acquire_slot(key, token)
+        try:
+            result = func(*args, **kwargs)
+            if inspect.isawaitable(result):
+                return await result
+            return result
+        finally:
+            await self._release_slot(key, token)
 
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            features = executor.submit(_run)
-            return features.result()
+    def wrap(self, func: Callable[..., Any], *args, **kwargs):
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            def _run():
+                return asyncio.run(self.execute(func, *args, **kwargs))
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                features = executor.submit(_run)
+                return features.result()
+        else:
+            return self.execute(func, *args, **kwargs)
 
 
 
