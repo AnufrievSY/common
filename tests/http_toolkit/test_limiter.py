@@ -1,6 +1,9 @@
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # Поднимаем корень проекта
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+import preflight
+preflight.run()
 
 import pytest
 import allure

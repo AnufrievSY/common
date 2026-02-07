@@ -4,12 +4,15 @@
 
 # Запуск тестов
 ```bash
-# Чистим старые результаты
-Remove-Item -Recurse -Force allure-results
+pytest -vv
 ```
+
+# Просмотр отчета Allure
 ```bash
-cp -r allure-report/history allure-results/history
-pytest -v
-allure generate allure-results -o allure-report 
-allure serve allure-results
+allure serve tests/allure/results
+```
+
+# Просмотр отчета покрытия
+```bash
+ .\\tests\reports\coverage\html\index.html
 ```
