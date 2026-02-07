@@ -38,8 +38,8 @@ def test_sync_concurrency_limit_200_429():
         resp = client.get("/sync_test")
         return resp.status_code
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        tasks = {executor.submit(fetch) for _ in range(2)}
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        tasks = {executor.submit(fetch) for _ in range(10)}
         results = {task.result() for task in tasks}
 
         assert results == {200, 429}
@@ -59,16 +59,16 @@ def test_sync_concurrency_limit_200_429():
 def test_sync_concurrency_limit_200_200():
     client = TestClient(app)
 
-    @limiter.concurrency_limit(limit=1)
+    @limiter.concurrency_limit(limit=2)
     def fetch():
         resp = client.get("/sync_test")
         return resp.status_code
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        tasks = {executor.submit(fetch) for _ in range(2)}
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        tasks = {executor.submit(fetch) for _ in range(10)}
         results = {task.result() for task in tasks}
 
-        assert results == {200, 200}
+        assert results == {200}
 
 @pytest.mark.asyncio
 @pytest.mark.http_toolkit
@@ -91,7 +91,7 @@ async def test_async_concurrency_limit_200_429():
             resp = await client.get("/async_test")
             return resp.status_code
 
-        tasks = [asyncio.create_task(fetch()) for _ in range(2)]
+        tasks = [asyncio.create_task(fetch()) for _ in range(10)]
         results = await asyncio.gather(*tasks)
 
         assert set(results) == {200, 429}
@@ -112,15 +112,15 @@ async def test_async_concurrency_limit_200_429():
 async def test_async_concurrency_limit_200_200():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://async_test") as client:
 
-        @limiter.concurrency_limit(limit=1)
+        @limiter.concurrency_limit(limit=2)
         async def fetch():
             resp = await client.get("/async_test")
             return resp.status_code
 
-        tasks = [asyncio.create_task(fetch()) for _ in range(2)]
+        tasks = [asyncio.create_task(fetch()) for _ in range(10)]
         results = await asyncio.gather(*tasks)
 
-        assert set(results) == {200, 429}
+        assert set(results) == {200}
 
 @pytest.mark.http_toolkit
 @pytest.mark.limiter
@@ -142,8 +142,8 @@ def test_sync_rate_limit_200_429():
         resp = client.get("/sync_test")
         return resp.status_code
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        tasks = {executor.submit(fetch) for _ in range(2)}
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        tasks = {executor.submit(fetch) for _ in range(10)}
         results = {task.result() for task in tasks}
 
         assert results == {200, 429}
@@ -163,16 +163,16 @@ def test_sync_rate_limit_200_429():
 def test_sync_rate_limit_200_200():
     client = TestClient(app)
 
-    @limiter.rate_limit(limit=1, period=1)
+    @limiter.rate_limit(limit=5, period=10)
     def fetch():
         resp = client.get("/sync_test")
         return resp.status_code
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        tasks = {executor.submit(fetch) for _ in range(2)}
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        tasks = {executor.submit(fetch) for _ in range(10)}
         results = {task.result() for task in tasks}
 
-        assert results == {200, 200}
+        assert results == {200}
 
 @pytest.mark.asyncio
 @pytest.mark.http_toolkit
@@ -190,12 +190,12 @@ def test_sync_rate_limit_200_200():
 async def test_async_rate_limit_200_429():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://async_test") as client:
 
-        @limiter.rate_limit(limit=10, period=0)
+        @limiter.rate_limit(limit=100, period=0)
         async def fetch():
             resp = await client.get("/async_test")
             return resp.status_code
 
-        tasks = [asyncio.create_task(fetch()) for _ in range(2)]
+        tasks = [asyncio.create_task(fetch()) for _ in range(10)]
         results = await asyncio.gather(*tasks)
 
         assert set(results) == {200, 429}
@@ -216,12 +216,12 @@ async def test_async_rate_limit_200_429():
 async def test_async_rate_limit_200_200():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://async_test") as client:
 
-        @limiter.rate_limit(limit=1, period=1)
+        @limiter.rate_limit(limit=5, period=10)
         async def fetch():
             resp = await client.get("/async_test")
             return resp.status_code
 
-        tasks = [asyncio.create_task(fetch()) for _ in range(2)]
+        tasks = [asyncio.create_task(fetch()) for _ in range(10)]
         results = await asyncio.gather(*tasks)
 
-        assert set(results) == {200, 429}
+        assert set(results) == {200}
