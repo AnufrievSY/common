@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 import asyncio
 
 from http_toolkit import limiter
-from tests.http_toolkit.fixtures import app
+from tests.http_toolkit.fixtures import app, reset_state
 
 @pytest.mark.http_toolkit
 @pytest.mark.limiter
@@ -32,10 +32,11 @@ from tests.http_toolkit.fixtures import app
 )
 def test_sync_concurrency_limit_200_429():
     client = TestClient(app)
+    reset_state()
 
     @limiter.concurrency_limit(limit=10)
     def fetch():
-        resp = client.get("/sync_test")
+        resp = client.get("/sync_concurrency_test")
         return resp.status_code
 
     with ThreadPoolExecutor(max_workers=10) as executor:
@@ -58,10 +59,11 @@ def test_sync_concurrency_limit_200_429():
 )
 def test_sync_concurrency_limit_200_200():
     client = TestClient(app)
+    reset_state()
 
     @limiter.concurrency_limit(limit=2)
     def fetch():
-        resp = client.get("/sync_test")
+        resp = client.get("/sync_concurrency_test")
         return resp.status_code
 
     with ThreadPoolExecutor(max_workers=10) as executor:
@@ -84,11 +86,12 @@ def test_sync_concurrency_limit_200_200():
     "функцией возвращается код 429"
 )
 async def test_async_concurrency_limit_200_429():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://async_test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://async_concurrency_test") as client:
+        reset_state()
 
         @limiter.concurrency_limit(limit=10)
         async def fetch():
-            resp = await client.get("/async_test")
+            resp = await client.get("/async_concurrency_test")
             return resp.status_code
 
         tasks = [asyncio.create_task(fetch()) for _ in range(10)]
@@ -110,11 +113,12 @@ async def test_async_concurrency_limit_200_429():
     "ограничениях на количество параллельных запросов асинхронной функцией"
 )
 async def test_async_concurrency_limit_200_200():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://async_test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://async_concurrency_test") as client:
+        reset_state()
 
         @limiter.concurrency_limit(limit=2)
         async def fetch():
-            resp = await client.get("/async_test")
+            resp = await client.get("/async_concurrency_test")
             return resp.status_code
 
         tasks = [asyncio.create_task(fetch()) for _ in range(10)]
@@ -136,10 +140,11 @@ async def test_async_concurrency_limit_200_200():
 )
 def test_sync_rate_limit_200_429():
     client = TestClient(app)
+    reset_state()
 
     @limiter.rate_limit(limit=10, period=0)
     def fetch():
-        resp = client.get("/sync_test")
+        resp = client.get("/sync_rate_test")
         return resp.status_code
 
     with ThreadPoolExecutor(max_workers=10) as executor:
@@ -162,10 +167,11 @@ def test_sync_rate_limit_200_429():
 )
 def test_sync_rate_limit_200_200():
     client = TestClient(app)
+    reset_state()
 
     @limiter.rate_limit(limit=5, period=10)
     def fetch():
-        resp = client.get("/sync_test")
+        resp = client.get("/sync_rate_test")
         return resp.status_code
 
     with ThreadPoolExecutor(max_workers=10) as executor:
@@ -188,11 +194,12 @@ def test_sync_rate_limit_200_200():
     "совершенных aсинхронной функции возвращается код 429"
 )
 async def test_async_rate_limit_200_429():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://async_test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://async_rate_test") as client:
+        reset_state()
 
         @limiter.rate_limit(limit=100, period=0)
         async def fetch():
-            resp = await client.get("/async_test")
+            resp = await client.get("/async_rate_test")
             return resp.status_code
 
         tasks = [asyncio.create_task(fetch()) for _ in range(10)]
@@ -214,11 +221,12 @@ async def test_async_rate_limit_200_429():
     "ограничениях на количество параллельных запросов aсинхронной функцией"
 )
 async def test_async_rate_limit_200_200():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://async_test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://async_rate_test") as client:
+        reset_state()
 
         @limiter.rate_limit(limit=5, period=10)
         async def fetch():
-            resp = await client.get("/async_test")
+            resp = await client.get("/async_rate_test")
             return resp.status_code
 
         tasks = [asyncio.create_task(fetch()) for _ in range(10)]
