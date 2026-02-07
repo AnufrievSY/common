@@ -9,7 +9,7 @@ pytest -vv
 
 # Просмотр отчета Allure
 ```bash
-allure serve tests/allure/results
+allure serve tests/reports/allure/results
 ```
 
 # Просмотр отчета покрытия

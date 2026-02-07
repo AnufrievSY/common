@@ -28,6 +28,7 @@ Lua-скрипт атомарно:
 import asyncio
 import datetime
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 from typing import Any, Callable
 import inspect
@@ -100,16 +101,20 @@ class _BaseLimiter(Redis):
         if self.release:
             await asyncio.to_thread(self.client.zrem, key, token)
 
-    async def wrap(self, func: Callable[..., Any], *args, **kwargs):
-        key = await self.key(**kwargs)
-        token = uuid.uuid4().hex
-        await self._acquire_slot(key, token)
-        try:
-            if inspect.iscoroutinefunction(func):
-                return await func(*args, **kwargs)
-            return func(*args, **kwargs)
-        finally:
-            await self._release_slot(key, token)
+    def wrap(self, func: Callable[..., Any], *args, **kwargs):
+        def _run():
+            key = asyncio.run(self.key(**kwargs))
+            token = uuid.uuid4().hex
+            asyncio.run(self._acquire_slot(key, token))
+            try:
+                return func(*args, **kwargs)
+            finally:
+                asyncio.run(self._release_slot(key, token))
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            features = executor.submit(_run)
+            return features.result()
+
 
 
 # Публичные “обертки”
@@ -125,14 +130,9 @@ def concurrency_limit(*, limit: int):
                                 limit=int(limit),
                                 period=1, release=True)
 
-        if inspect.iscoroutinefunction(func):
-            @wraps(func)
-            async def wrapper(*args, **kwargs):
-                return await _limiter.wrap(func, *args, **kwargs)
-        else:
-            @wraps(func)
-            def wrapper(*args, **kwargs):
-                return asyncio.run(_limiter.wrap(func, *args, **kwargs))
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            return _limiter.wrap(func, *args, **kwargs)
         return wrapper
     return decorator
 
