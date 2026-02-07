@@ -19,7 +19,6 @@ async def async_test_endpoint():
         raise HTTPException(429, "Too Many Requests")
     await async_semaphore.acquire()
     try:
-        await asyncio.sleep(1)
         return {"ok": True}
     finally:
         async_semaphore.release()

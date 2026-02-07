@@ -147,7 +147,7 @@ def rate_limit(*, limit: int, period: int):
     """
 
     def decorator(func: Callable[..., Any]):
-        _limiter = _BaseLimiter(prefix="concurrency_limit",
+        _limiter = _BaseLimiter(prefix="rate_limit",
                                limit=int(limit),
                                period=int(period), release=False)
         @wraps(func)
