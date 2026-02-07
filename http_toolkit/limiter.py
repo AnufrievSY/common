@@ -132,11 +132,7 @@ def concurrency_limit(*, limit: int):
         else:
             @wraps(func)
             def wrapper(*args, **kwargs):
-                try:
-                    asyncio.get_running_loop()
-                except RuntimeError:
-                    return asyncio.run(_limiter.wrap(func, *args, **kwargs))
-                raise RuntimeError("Нельзя вызывать синхронный лимитер внутри активного event loop")
+                return asyncio.run(_limiter.wrap(func, *args, **kwargs))
         return wrapper
     return decorator
 

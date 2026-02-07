@@ -92,13 +92,10 @@ async def test_async_limit_200_429():
             resp = await client.get("/async_test")
             return resp.status_code
 
-        t1 = asyncio.create_task(fetch())
-        t2 = asyncio.create_task(fetch())
+        tasks = [asyncio.create_task(fetch()) for _ in range(2)]
+        results = await asyncio.gather(*tasks)
 
-        r1 = await t1
-        r2 = await t2
-
-        assert {r1, r2} == {200, 429}
+        assert set(results) == {200, 429}
 
 
 @pytest.mark.asyncio
@@ -122,10 +119,7 @@ async def test_limit_200_200():
             resp = await client.get("/async_test")
             return resp.status_code
 
-        t1 = asyncio.create_task(fetch())
-        t2 = asyncio.create_task(fetch())
+        tasks = [asyncio.create_task(fetch()) for _ in range(2)]
+        results = await asyncio.gather(*tasks)
 
-        r1 = await t1
-        r2 = await t2
-
-        assert {r1, r2} == {200, 200}
+        assert set(results) == {200, 429}
