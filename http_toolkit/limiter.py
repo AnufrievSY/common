@@ -28,12 +28,11 @@ Lua-скрипт атомарно:
 import asyncio
 import datetime
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 from typing import Any, Callable
 import inspect
 
-from .core import Redis
+from .core import Wrapper, Redis
 
 LUA = """
 local key = KEYS[1]                 -- Redis ключ ZSET, где хранятся активные слоты (str)
@@ -60,8 +59,9 @@ return 1
 """
 
 
-class _BaseLimiter(Redis):
-    """Базовый Redis-лимитер
+class _BaseLimiter(Wrapper, Redis):
+    """
+    Базовый Redis-лимитер
 
     Это внутренний класс (не предполагается, что его будут создавать напрямую),
     но именно он реализует общую механику:
@@ -81,7 +81,9 @@ class _BaseLimiter(Redis):
             period: TTL токена в секундах
             release: Нужно ли вручную освобождать слот после выполнения функции
         """
-        super().__init__(prefix=prefix)
+        Wrapper.__init__(self)
+        Redis.__init__(self, prefix=prefix)
+
         self.register_script(name="acquire_slot", script=LUA)
         self.period = period
         self.limit = limit
@@ -112,19 +114,6 @@ class _BaseLimiter(Redis):
             return result
         finally:
             await self._release_slot(key, token)
-
-    def wrap(self, func: Callable[..., Any], *args, **kwargs):
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            def _run():
-                return asyncio.run(self.execute(func, *args, **kwargs))
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                features = executor.submit(_run)
-                return features.result()
-        else:
-            return self.execute(func, *args, **kwargs)
-
 
 
 # Публичные “обертки”

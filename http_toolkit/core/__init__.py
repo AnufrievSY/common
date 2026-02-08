@@ -1,9 +1,30 @@
-from typing import Optional, Any
+from typing import Any, Callable, Optional
 import time
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import redis
 
 from . import types, utils, exceptions
+
+class Wrapper:
+    """Базовый класс для обработки запросов к API"""
+    async def execute(self, func: Callable[..., Any], *args, **kwargs): ...
+
+    def wrap(self, func: Callable[..., Any], *args, **kwargs):
+        if asyncio.iscoroutinefunction(func):
+            return self.execute(func, *args, **kwargs)
+
+        def _run():
+            loop = asyncio.new_event_loop()
+            try:
+                asyncio.set_event_loop(loop)
+                return loop.run_until_complete(self.execute(func, *args, **kwargs))
+            finally:
+                loop.run_until_complete(loop.shutdown_asyncgens())
+                loop.close()
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            features = executor.submit(_run)
+            return features.result()
 
 
 class Redis:
