@@ -60,17 +60,7 @@ return 1
 
 
 class _BaseLimiter(Wrapper, Redis):
-    """
-    Базовый Redis-лимитер
-
-    Это внутренний класс (не предполагается, что его будут создавать напрямую),
-    но именно он реализует общую механику:
-
-    - формирование ключа
-    - атомарный acquire через Lua
-    - ожидание (poll loop)
-    - release (опционально)
-    """
+    """Базовый Redis-лимитер"""
 
     def __init__(self, prefix: str, limit: int, period: int, release: bool):
         """

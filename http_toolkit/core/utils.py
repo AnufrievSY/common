@@ -8,11 +8,14 @@ async def to_hashkey(**kwargs) -> str:
                    )
     return hashlib.md5(s.encode("utf-8")).hexdigest()
 
-async def extract_body(raise_exc = False, **kwargs):
-    """Извлекает тело запроса"""
-    for key in ["json", "data", "body", "text"]:
-        if key in kwargs and kwargs.get(key) is not None:
-            return kwargs[key]
+async def extract_body(r, raise_exc = False):
+    """Извлекает тело запроса или ответа"""
+    if hasattr(r, "json"):
+        return r.json()
+    if hasattr(r, "body"):
+        return r.body
+    if hasattr(r, "text"):
+        return r.text
     if raise_exc:
-        raise ValueError("Тело запроса не найдено или пустое")
+        raise ValueError("Тело не найдено или пустое")
     return None

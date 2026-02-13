@@ -1,13 +1,27 @@
 from typing import Any, Callable, Optional
+from tqdm import tqdm
 import time
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+import pickle
+import pandas as pd
 import redis
 
 from . import types, utils, exceptions
 
 class Wrapper:
     """Базовый класс для обработки запросов к API"""
+    response = None
+
+    @property
+    async def status(self) -> int:
+        if self.response is None:
+            raise ValueError("Response is None")
+        for key in ["status", "status_code"]:
+            if hasattr(self.response, key):
+                return int(getattr(self.response, key))
+        raise ValueError(f"Статус запроса не найден или не прописан в ответе: {self.response.__dict__}")
+
     async def execute(self, func: Callable[..., Any], *args, **kwargs): ...
 
     def wrap(self, func: Callable[..., Any], *args, **kwargs):
@@ -32,7 +46,9 @@ class Redis:
     scripts: dict[str, Any] = {}
 
     def __init__(self, prefix: str,
-                 host: str = "localhost", port: int = 6379, db: int = 0, password: Optional[str] = None):
+                 host: str = "localhost", port: int = 6379, db: int = 0, password: Optional[str] = None,
+                 decode_responses: bool = True
+                 ):
         """
         Инициализация Redis
         Args:
@@ -41,9 +57,10 @@ class Redis:
             port: порт Redis
             db: номер базы данных Redis
             password: пароль для подключения к Redis
+            decode_responses: декодирование ответов Redis
         """
         self.prefix = prefix
-        self.client = redis.Redis(host=host, port=port, db=db, password=password, decode_responses=True)
+        self.client = redis.Redis(host=host, port=port, db=db, password=password, decode_responses=decode_responses)
 
     def register_script(self, name: str, script: str):
         """
@@ -53,6 +70,48 @@ class Redis:
             script: LUA скрипт Redis
         """
         self.scripts[name] = self.client.register_script(script)
+
+    def get_df(self) -> pd.DataFrame:
+        """Возвращает все данные Redis по текущему prefix в виде DataFrame"""
+        cursor = 0
+        keys = []
+        while True:
+            cursor, batch = self.client.scan(cursor=cursor, count=1000)
+            keys.extend(batch)
+            if cursor == 0:
+                break
+
+        rows = []
+        for key in tqdm(keys, desc="Redis.get_df", total=len(keys)):
+            value = self.client.get(key)
+
+            if value is None:
+                continue
+
+            value = pickle.loads(value)
+
+            rows.append({"key": key.decode(), "value": value})
+
+        return pd.DataFrame(rows)
+
+    def delete(self, key: str) -> int:
+        """
+        Удаляет данные из Redis
+        Args:
+            key: ключ Redis - допускает передача только фрагмента
+        """
+
+        cursor = 0
+        deleted = 0
+        pattern = f"*{key}*"
+
+        while True:
+            cursor, keys = self.client.scan(cursor=cursor, match=pattern, count=1000)
+            if keys:
+                deleted += self.client.delete(*keys)
+            if cursor == 0:
+                break
+        return deleted
 
     async def execute_script(self, name: str, keys: list[str], args: list[Any], expected: Any,
                              timeout: int = 60) -> Any:

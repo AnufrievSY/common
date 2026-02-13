@@ -93,15 +93,6 @@ class _BaseValidator(Wrapper):
 
         Wrapper.__init__(self)
 
-    @property
-    async def status(self) -> int:
-        if self.response is None:
-            raise ValueError("Response is None")
-        for key in ["status", "status_code"]:
-            if hasattr(self.response, key):
-                return int(getattr(self.response, key))
-        raise ValueError(f"Статус запроса не найден или не прописан в ответе: {self.response.__dict__}")
-
     async def _check(self, condition: Union[IgnoreCondition, RetryCondition]) -> bool:
         if condition is None:
             return False
@@ -142,7 +133,7 @@ class _BaseValidator(Wrapper):
                 raise TooMuchRetries(
                     f"Превышено количество повторов ({self.retry.max_count}). "
                     f"Последний статус={await self.status}, "
-                    f"текст={await extract_body(raise_exc=False, **self.response.__dict__)}"
+                    f"текст={await extract_body(self.response, False)}"
                 ) from self.exception
 
             _c += 1
