@@ -66,7 +66,7 @@ async def test_async_validate_retry_by_status_200():
         try:
             r2.request
         except RuntimeError as exc:
-            assert str(exc) == 'The request instance has not been set on this response'
+            assert str(exc) == 'The request instance has not been set on this response.'
 
         assert r1.status_code == 200
         assert r2.status_code == 200

@@ -55,7 +55,8 @@ class Cache(Wrapper, Redis):
         answer = func(*args, **kwargs)
         if inspect.isawaitable(answer):
             self.response = await answer
-        self.response = answer
+        else:
+            self.response = answer
 
         if await self.status < 300:
             value = {'status_code': await self.status}
