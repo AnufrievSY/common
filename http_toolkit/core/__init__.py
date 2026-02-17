@@ -1,4 +1,6 @@
 from typing import Any, Callable, Optional
+
+import httpx
 from tqdm import tqdm
 import time
 import asyncio
@@ -20,11 +22,11 @@ class Wrapper:
         for key in ["status", "status_code"]:
             if hasattr(self.response, key):
                 return int(getattr(self.response, key))
-        raise ValueError(f"Статус запроса не найден или не прописан в ответе: {self.response.__dict__}")
+        raise ValueError(f"Статус запроса не найден или не прописан в ответе: {self.response.__dir__}")
 
     async def execute(self, func: Callable[..., Any], *args, **kwargs): ...
 
-    def wrap(self, func: Callable[..., Any], *args, **kwargs):
+    def wrap(self, func: Callable[..., Any], *args, **kwargs) -> httpx.Response:
         if asyncio.iscoroutinefunction(func):
             return self.execute(func, *args, **kwargs)
 

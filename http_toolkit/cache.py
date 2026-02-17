@@ -20,10 +20,17 @@ from typing import Callable, Any, Optional
 
 from .core import  Wrapper, Redis
 
-class _BaseCache(Wrapper, Redis):
-    """Базовый  Redis-кэш"""
+class Cache(Wrapper, Redis):
+    """
+    Кэширует запрос на определенное время
+    Args:
+        ttl: Время на которое необходимо кэшировать запрос, допускается:
+            - None (по-умолчанию) -> кеш отключён, всегда вызываем функцию
+            - float("inf") -> кеш без срока
+            - целое число (сек) -> кеш на ttl секунд
+    """
 
-    def __init__(self, prefix: str = "cache", ttl = None):
+    def __init__(self, ttl = None, prefix: str = "cache"):
         """
         Инициализация базового Redis-кэша
         """
@@ -31,6 +38,12 @@ class _BaseCache(Wrapper, Redis):
         Redis.__init__(self, prefix=prefix, decode_responses=False)
 
         self.ttl = ttl
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
 
     async def execute(self, func: Callable[..., Any], *args, **kwargs) -> httpx.Response:
         key = await self.key(method=args[-1], url=args[-2], **kwargs)
@@ -64,23 +77,3 @@ class _BaseCache(Wrapper, Redis):
                 self.client.setex(name=key, time=self.ttl, value=value)
 
         return self.response
-
-
-# Публичные “обертки”
-def cache(*, ttl: Optional[float]):
-    """
-    Кэширует запрос на определенное время
-    Args:
-        ttl: Время на которое необходимо кэшировать запрос, допускается:
-            - None (по-умолчанию) -> кеш отключён, всегда вызываем функцию
-            - float("inf") -> кеш без срока
-            - целое число (сек) -> кеш на ttl секунд
-    """
-    def decorator(func: Callable[..., Any]):
-        _limiter = _BaseCache(prefix="cache", ttl=ttl)
-
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            return _limiter.wrap(func, *args, **kwargs)
-        return wrapper
-    return decorator
