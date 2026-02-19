@@ -2,12 +2,11 @@ import os
 import time
 from typing import Optional
 
-from preflight.common import get_logger, SafeSubprocess
-from preflight.exceptions import CmdError
-from preflight.types import LogLevels
+from utils.http_toolkit.preflight.core.utils import get_logger, SafeSubprocess
+from utils.http_toolkit.preflight.core.exceptions import CmdError
+from utils.http_toolkit.preflight.core.types import LogLevels
 
 log = get_logger()
-
 
 def is_installed() -> Optional[str]:
     """Ищет Docker Desktop.exe"""

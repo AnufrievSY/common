@@ -1,53 +1,24 @@
-from typing import Iterable, Final
-
-import subprocess
 import logging
+from typing import Iterable
+import subprocess
+
+from utils.logger import Logger
+from utils.logger.handlers import get_stream_handler
 
 from .exceptions import CmdError
 from .types import LogLevels
 
-# --- Настройки логгера ---
-
-logging.addLevelName(level=LogLevels.DONE, levelName="DONE")
-
-
-class ColorHandler(logging.StreamHandler):
-    """Потоковый обработчик с раскраской логов по уровням."""
-
-    COLOR_CODES: Final[dict[int, str]] = {
-        logging.DEBUG: "\033[90m",      # Gray
-        logging.INFO: "\033[97m",       # White
-        LogLevels.DONE: "\033[92m",     # Green
-        logging.WARNING: "\033[93m",    # Yellow
-        logging.ERROR: "\033[91m",      # Red
-        logging.CRITICAL: "\033[95m"    # Magenta
-    }
-    RESET_CODE: Final[str] = "\033[0m"
-
-    def format(self, record: logging.LogRecord) -> str:
-        message = super().format(record)
-        color = self.COLOR_CODES.get(record.levelno, "")
-        return f"{color}{message}{self.RESET_CODE}" if color else message
-
-
-def get_logger() -> logging.Logger:
-    logger = logging.getLogger(name="PREFLIGHT")
-    logger.propagate = False
-    logger.setLevel(level=logging.DEBUG)
-
+def get_logger():
+    log = Logger(name='http_toolkit-preflight', lvl="INFO")
     formater = logging.Formatter(
         fmt="%(levelname)-9s | %(asctime)s.%(msecs)03d | %(message)s",
         datefmt="%H:%M:%S",
     )
-
-    handler = ColorHandler()
-    handler.setFormatter(fmt=formater)
-    logger.addHandler(hdlr=handler)
-
-    return logger
-
-
-# --- Другие операции ---
+    handler = get_stream_handler(formater)
+    handler.COLOR_CODES.update({LogLevels.DONE: "\033[92m"})  # Green
+    log.logger.handlers = [handler]
+    logging.addLevelName(level=LogLevels.DONE, levelName="DONE")
+    return log.logger
 
 class SafeSubprocess:
     """Запуск команды. Возвращает CompletedProcess."""

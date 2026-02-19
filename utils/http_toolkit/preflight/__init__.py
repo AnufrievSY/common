@@ -1,8 +1,8 @@
 import sys
 
-from preflight.types import RedisConfig
-from preflight import redis, doker
-from preflight.common import get_logger
+from utils.http_toolkit.preflight.core.types import RedisConfig
+from utils.http_toolkit.preflight import redis, doker
+from utils.http_toolkit.preflight.core.utils import get_logger
 
 log = get_logger()
 

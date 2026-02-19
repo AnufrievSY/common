@@ -1,8 +1,8 @@
 import socket
 import time
-from preflight.common import get_logger, SafeSubprocess
-from preflight.exceptions import CmdError
-from preflight.types import LogLevels, RedisConfig
+from utils.http_toolkit.preflight.core.utils import get_logger, SafeSubprocess
+from utils.http_toolkit.preflight.core.exceptions import CmdError
+from utils.http_toolkit.preflight.core.types import LogLevels, RedisConfig
 
 log = get_logger()
 
@@ -67,7 +67,6 @@ def is_available(cfg: RedisConfig, ignore_errors: bool = False) -> bool:
     try:
         proc = SafeSubprocess(["docker", "exec", cfg.container_name, "redis-cli", "ping"]).run()
         if proc.returncode == 0 and "PONG" in (proc.stdout or ""):
-            log.log(level=LogLevels.DONE, msg=f'Redis запущен')
             return True
         if not ignore_errors:
             raise Exception(f'Redis не отвечает')
@@ -95,7 +94,6 @@ def start_redis(cfg: RedisConfig) -> None:
             cfg.image,
         ]
     ).run()
-    log.log(level=LogLevels.DONE, msg=f'Redis запущен')
 
 
 def ensure(cfg: RedisConfig = RedisConfig()) -> None:

@@ -1,5 +1,6 @@
 import requests
-from http_toolkit.validator import validate, RetryCondition
+from utils.http_toolkit import validate
+from utils.http_toolkit.validator import RetryCondition
 
 API_URL = 'https://api.github.com'
 GRAPHQL_URL = 'https://api.github.com/graphql'

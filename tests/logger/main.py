@@ -2,7 +2,7 @@ import pytest
 import allure
 
 import logging
-from logger import get_logger
+from utils.logger import get_logger
 
 @pytest.mark.logger
 @allure.parent_suite("Logger")

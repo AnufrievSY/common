@@ -2,8 +2,6 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-import preflight
-preflight.run()
 
 import pytest
 import allure
@@ -11,13 +9,9 @@ import allure
 from httpx import AsyncClient
 from httpx._transports.asgi import ASGITransport
 from fastapi.testclient import TestClient
-from concurrent.futures import ThreadPoolExecutor
-from types import SimpleNamespace
 
-import asyncio
-
-from http_toolkit import Cache
-from tests.http_toolkit.fixtures import app, reset_state
+from utils.http_toolkit import Cache
+from fixtures import app, reset_state
 
 @pytest.mark.http_toolkit
 @pytest.mark.cache
@@ -55,7 +49,7 @@ def test_sync_cache():
 @allure.description(
     "Тест проверяет, что при асинхронном вызове, данные кэшируются"
 )
-async def test_async_validate_retry_by_status_200():
+async def test_async_cache():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://async_rate_test") as client:
         reset_state()
 

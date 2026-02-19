@@ -2,9 +2,6 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-import preflight
-preflight.run()
-
 import pytest
 import allure
 
@@ -15,8 +12,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import asyncio
 
-from http_toolkit import limiter
-from tests.http_toolkit.fixtures import app, reset_state
+from utils.http_toolkit import limiter
+from fixtures import app, reset_state
 
 @pytest.mark.http_toolkit
 @pytest.mark.limiter

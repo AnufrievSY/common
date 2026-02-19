@@ -11,6 +11,7 @@ class Logger:
         date_format="%d-%m-%Y %H:%M:%S",
     )
 
+
     def __init__(self, name: str = '',
                  lvl: Literal['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] = 'DEBUG',
                  ):
@@ -18,8 +19,10 @@ class Logger:
         self.logger.propagate = False
         self.logger.setLevel(lvl)
 
-    def set_formater(self, **kwargs):
-        self._formater = handlers.get_formater(**kwargs)
+        self._handlers: list[logging.Handler] = []
+
+    def set_formater(self, text_format: str, date_format: str):
+        self._formater = handlers.get_formater(text_format=text_format, date_format=date_format)
 
     def add_stream_handler(self):
         handler = handlers.get_stream_handler(formater=self._formater)
@@ -43,8 +46,9 @@ class Logger:
 
     def add_tg_handler(self, bot: telebot.TeleBot, chat_id: int, message_thread_id: int = None,
                        lvl: Literal['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] = 'ERROR'):
-        handlers.get_bot_handler(bot=bot, chat_id=chat_id, message_thread_id=message_thread_id,
+        handler = handlers.get_bot_handler(bot=bot, chat_id=chat_id, message_thread_id=message_thread_id,
                                  formater=self._formater, level=lvl)
+        self.logger.addHandler(handler)
 
 
 def get_logger(name: str, lvl: Literal['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] = 'DEBUG'):

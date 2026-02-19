@@ -5,9 +5,6 @@ from typing import Final
 import sys
 import linecache
 import traceback
-from services.telegram import send_error_traceback
-from services.git_hub import Executor as GitHubExecutor
-from services.git_hub import GitHubConfig
 
 
 def get_formater(text_format: str, date_format: str) -> logging.Formatter:
@@ -51,6 +48,7 @@ def get_stream_handler(formater: logging.Formatter) -> ColorHandler:
     return handler
 
 
+from services.telegram import send_error_traceback
 class TelegramHandler(logging.Handler):
     """
     Логгер-хендлер, отправляющий сообщения об ошибках в Telegram.
@@ -98,7 +96,8 @@ def get_bot_handler(formater: logging.Formatter, bot: telebot.TeleBot, chat_id: 
     handler.setLevel(level)
     return handler
 
-
+from services.git_hub import Executor as GitHubExecutor
+from services.git_hub import GitHubConfig
 class GitHubHandler(logging.Handler):
     """
     Хендлер, который при логировании ошибок автоматически создаёт issue на GitHub.
