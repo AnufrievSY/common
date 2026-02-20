@@ -58,11 +58,14 @@ class Cache(Wrapper, Redis):
         else:
             self.response = answer
 
-        if await self.status < 300:
-            value = {'status_code': await self.status}
+        status = await self.status
+        if status < 300:
+            value = {'status_code': status}
 
             if hasattr(self.response, "json"):
-                value['json'] = self.response.json()
+                value['json'] = await self.response.json() \
+                    if inspect.isawaitable(self.response.json()) \
+                    else self.response.json
             if hasattr(self.response, "body"):
                 value['body'] = self.response.body
             if hasattr(self.response, "text"):

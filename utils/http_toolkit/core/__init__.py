@@ -1,3 +1,4 @@
+import inspect
 from typing import Any, Callable, Optional
 
 import httpx
@@ -17,30 +18,38 @@ class Wrapper:
 
     @property
     async def status(self) -> int:
-        if self.response is None:
+        response = self.response
+        if response is None:
             raise ValueError("Response is None")
+        if inspect.isawaitable(response):
+            response = await response
         for key in ["status", "status_code"]:
-            if hasattr(self.response, key):
-                return int(getattr(self.response, key))
-        raise ValueError(f"Статус запроса не найден или не прописан в ответе: {self.response.__dir__}")
+            if hasattr(response, key):
+                return int(getattr(response, key))
+        raise ValueError(f"Статус запроса не найден или не прописан в ответе: {response.__dir__}")
 
     async def execute(self, func: Callable[..., Any], *args, **kwargs): ...
 
     def wrap(self, func: Callable[..., Any], *args, **kwargs) -> httpx.Response:
         if asyncio.iscoroutinefunction(func):
-            return self.execute(func, *args, **kwargs)
+            answer = self.execute(func, *args, **kwargs)
+        else:
+            def _run():
+                loop = asyncio.new_event_loop()
+                try:
+                    asyncio.set_event_loop(loop)
+                    return loop.run_until_complete(self.execute(func, *args, **kwargs))
+                finally:
+                    loop.run_until_complete(loop.shutdown_asyncgens())
+                    loop.close()
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                features = executor.submit(_run)
+                answer = features.result()
 
-        def _run():
-            loop = asyncio.new_event_loop()
-            try:
-                asyncio.set_event_loop(loop)
-                return loop.run_until_complete(self.execute(func, *args, **kwargs))
-            finally:
-                loop.run_until_complete(loop.shutdown_asyncgens())
-                loop.close()
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            features = executor.submit(_run)
-            return features.result()
+        async def to_coroutine(value):
+            return await value if inspect.isawaitable(value) else value
+
+        return to_coroutine(answer)
 
 
 class Redis:
