@@ -78,3 +78,22 @@ class Cache(Wrapper, Redis):
                 self.client.setex(name=key, time=self.ttl, value=value)
 
         return self.response
+
+# Публичные “обертки”
+def cache(*, ttl = None):
+    """
+    Глобальный декоратор кэширования
+    Args:
+        ttl: Время на которое необходимо кэшировать запрос, допускается:
+            - None (по-умолчанию) -> кеш отключён, всегда вызываем функцию
+            - float("inf") -> кеш без срока
+            - целое число (сек) -> кеш на ttl секунд
+    """
+    def decorator(func: Callable[..., Any]):
+        _cacher = Cache(prefix="cache", ttl=ttl)
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            return _cacher.wrap(func, *args, **kwargs)
+        return wrapper
+    return decorator
