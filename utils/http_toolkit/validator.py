@@ -168,7 +168,9 @@ def validate(*,
 
         @wraps(func)
         def wrapper(*args, **kwargs):
-            return _validator.wrap(func, *args, **kwargs)
+            bound = inspect.signature(func).bind(*args, **kwargs)
+            bound.apply_defaults()
+            return _validator.wrap(func, *bound.args, **bound.kwargs)
 
         return wrapper
 

@@ -127,7 +127,9 @@ def concurrency_limit(*, limit: int):
 
         @wraps(func)
         def wrapper(*args, **kwargs):
-            return _limiter.wrap(func, *args, **kwargs)
+            bound = inspect.signature(func).bind(*args, **kwargs)
+            bound.apply_defaults()
+            return _limiter.wrap(func, *bound.args, **bound.kwargs)
         return wrapper
     return decorator
 
@@ -147,6 +149,8 @@ def rate_limit(*, limit: int, period: int):
                            period=int(period), release=False)
         @wraps(func)
         def wrapper(*args, **kwargs):
-            return _limiter.wrap(func, *args, **kwargs)
+            bound = inspect.signature(func).bind(*args, **kwargs)
+            bound.apply_defaults()
+            return _limiter.wrap(func, *bound.args, **bound.kwargs)
         return wrapper
     return decorator
