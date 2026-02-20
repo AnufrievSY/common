@@ -70,7 +70,7 @@ class RetryCondition(_ResponseCondition):
     max_count: int = 1
 
 
-class _BaseValidator(Wrapper):
+class Validator(Wrapper):
     """Базовый класс для валидирования результатов запроса"""
     response: Any = None
     exception: Optional[BaseException] = None
@@ -92,6 +92,12 @@ class _BaseValidator(Wrapper):
         self.ignore = ignore
 
         Wrapper.__init__(self)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
 
     async def _check(self, condition: Union[IgnoreCondition, RetryCondition]) -> bool:
         if condition is None:
@@ -158,7 +164,7 @@ def validate(*,
     """
 
     def decorator(func: Callable[..., Any]):
-        _validator = _BaseValidator(retry=retry, ignore=ignore)
+        _validator = Validator(retry=retry, ignore=ignore)
 
         @wraps(func)
         def wrapper(*args, **kwargs):

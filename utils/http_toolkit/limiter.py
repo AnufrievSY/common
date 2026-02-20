@@ -59,7 +59,7 @@ return 1
 """
 
 
-class _BaseLimiter(Wrapper, Redis):
+class Limiter(Wrapper, Redis):
     """Базовый Redis-лимитер"""
 
     def __init__(self, prefix: str, limit: int, period: int, release: bool):
@@ -78,6 +78,12 @@ class _BaseLimiter(Wrapper, Redis):
         self.period = period
         self.limit = limit
         self.release = release
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
 
     async def _acquire_slot(self, key: str, token: str) -> None:
         """Проверка доступности слота и занятие"""
@@ -115,9 +121,9 @@ def concurrency_limit(*, limit: int):
         limit: Максимум одновременно выполняемых задач
     """
     def decorator(func: Callable[..., Any]):
-        _limiter = _BaseLimiter(prefix="concurrency_limit",
-                                limit=int(limit),
-                                period=1, release=True)
+        _limiter = Limiter(prefix="concurrency_limit",
+                           limit=int(limit),
+                           period=1, release=True)
 
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -136,9 +142,9 @@ def rate_limit(*, limit: int, period: int):
     """
 
     def decorator(func: Callable[..., Any]):
-        _limiter = _BaseLimiter(prefix="rate_limit",
-                               limit=int(limit),
-                               period=int(period), release=False)
+        _limiter = Limiter(prefix="rate_limit",
+                           limit=int(limit),
+                           period=int(period), release=False)
         @wraps(func)
         def wrapper(*args, **kwargs):
             return _limiter.wrap(func, *args, **kwargs)
