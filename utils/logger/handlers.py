@@ -48,7 +48,6 @@ def get_stream_handler(formater: logging.Formatter) -> ColorHandler:
     return handler
 
 
-from services.telegram import send_error_traceback
 class TelegramHandler(logging.Handler):
     """
     Логгер-хендлер, отправляющий сообщения об ошибках в Telegram.
@@ -80,6 +79,8 @@ class TelegramHandler(logging.Handler):
         return "".join(frames_out), str(exc_value) if exc_value else "Unknown Exception"
 
     def emit(self, record: logging.LogRecord) -> None:
+        from services.telegram import send_error_traceback
+
         traceback_text, exception = self.get_custom_traceback() if record.exc_info else ("", record.getMessage())
         send_error_traceback(
             bot=self.bot, chat_id=self.chat_id, message_thread_id=self.message_thread_id,
@@ -96,8 +97,7 @@ def get_bot_handler(formater: logging.Formatter, bot: telebot.TeleBot, chat_id: 
     handler.setLevel(level)
     return handler
 
-from services.git_hub import Executor as GitHubExecutor
-from services.git_hub import GitHubConfig
+
 class GitHubHandler(logging.Handler):
     """
     Хендлер, который при логировании ошибок автоматически создаёт issue на GitHub.
@@ -107,6 +107,9 @@ class GitHubHandler(logging.Handler):
     def __init__(self, token: str, owner: str, assignee_login: list[str], repo: str, project: str,
                  label: str = 'bug', status: str = 'BackLog',
                  level: int | str = logging.ERROR):
+        from services.git_hub import Executor as GitHubExecutor
+        from services.git_hub import GitHubConfig
+
         super().__init__(level)
 
         self.executor = GitHubExecutor(config=GitHubConfig(token=token, owner=owner, repo=repo))
