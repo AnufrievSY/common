@@ -20,7 +20,7 @@ def json_to_schema(data, file_path: str | Path = "schema.json"):
     with open(str(file_path), "w") as f:
         json.dump(schema, f, indent=2)
 
-@has_extension(ext="py")
+@has_extension(ext="py", raise_not_found=False)
 def json_to_pydantic(data, file_path: str | Path = "model.py"):
     """Конвертирует JSON в pydantic-модель"""
     generate(
