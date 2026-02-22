@@ -62,16 +62,10 @@ class Cache(Wrapper, Redis):
         if status < 300:
             value = {'status_code': status}
 
-            if hasattr(self.response, "json"):
-                value['json'] = await self.response.json() \
-                    if inspect.isawaitable(self.response.json()) \
-                    else self.response.json
-            if hasattr(self.response, "body"):
-                value['body'] = self.response.body
-            if hasattr(self.response, "text"):
-                value['text'] = self.response.text
-            if hasattr(self.response, "content"):
-                value['content'] = self.response.content
+            value['json'] = await self.response.json() \
+                if inspect.isawaitable(self.response.json()) \
+                else self.response.json
+
 
             value = pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
 
