@@ -15,6 +15,6 @@ def has_extension(ext: str, raise_not_found: bool = False):
                 raise ValueError(f"Файл {file_path} имеет неверное расширение. Ожидалось {ext}")
             if not Path(file_path).exists() and raise_not_found:
                 raise FileNotFoundError(f"Файл {file_path} не найден.")
-            return func(file_path)
+            return func(**kwargs)
         return wrapper
     return decorator
