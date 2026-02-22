@@ -162,16 +162,5 @@ def validate(*,
         retry: Условия повтора запроса
         ignore: Условия игнорирования запроса
     """
-
-    def decorator(func: Callable[..., Any]):
-        _validator = Validator(retry=retry, ignore=ignore)
-
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            bound = inspect.signature(func).bind(*args, **kwargs)
-            bound.apply_defaults()
-            return _validator.wrap(func, *bound.args, **bound.kwargs)
-
-        return wrapper
-
-    return decorator
+    _validator = Validator(retry=retry, ignore=ignore)
+    return _validator.wrap

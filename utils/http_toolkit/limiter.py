@@ -100,7 +100,7 @@ class Limiter(Wrapper, Redis):
             await asyncio.to_thread(self.client.zrem, key, token)
 
     async def execute(self, func: Callable[..., Any], *args, **kwargs):
-        key = await self.key(**kwargs)
+        key = await self.key(method=args[-1], url=args[-2], **kwargs)
         token = uuid.uuid4().hex
         await self._acquire_slot(key, token)
         try:
@@ -120,18 +120,10 @@ def concurrency_limit(*, limit: int):
     Args:
         limit: Максимум одновременно выполняемых задач
     """
-    def decorator(func: Callable[..., Any]):
-        _limiter = Limiter(prefix="concurrency_limit",
-                           limit=int(limit),
-                           period=1, release=True)
-
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            bound = inspect.signature(func).bind(*args, **kwargs)
-            bound.apply_defaults()
-            return _limiter.wrap(func, *bound.args, **bound.kwargs)
-        return wrapper
-    return decorator
+    _limiter = Limiter(prefix="concurrency_limit",
+                       limit=int(limit),
+                       period=1, release=True)
+    return _limiter.wrap
 
 def rate_limit(*, limit: int, period: int):
     """
@@ -142,15 +134,7 @@ def rate_limit(*, limit: int, period: int):
         limit: Максимум запусков в окне
         period: Размер окна (сек)
     """
-
-    def decorator(func: Callable[..., Any]):
-        _limiter = Limiter(prefix="rate_limit",
-                           limit=int(limit),
-                           period=int(period), release=False)
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            bound = inspect.signature(func).bind(*args, **kwargs)
-            bound.apply_defaults()
-            return _limiter.wrap(func, *bound.args, **bound.kwargs)
-        return wrapper
-    return decorator
+    _limiter = Limiter(prefix="rate_limit",
+                       limit=int(limit),
+                       period=int(period), release=False)
+    return _limiter.wrap

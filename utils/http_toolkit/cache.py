@@ -92,13 +92,5 @@ def cache(*, ttl = None):
             - float("inf") -> кеш без срока
             - целое число (сек) -> кеш на ttl секунд
     """
-    def decorator(func: Callable[..., Any]):
-        _cacher = Cache(prefix="cache", ttl=ttl)
-
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            bound = inspect.signature(func).bind(*args, **kwargs)
-            bound.apply_defaults()
-            return _cacher.wrap(func, *bound.args, **bound.kwargs)
-        return wrapper
-    return decorator
+    _cacher = Cache(prefix="cache", ttl=ttl)
+    return _cacher.wrap

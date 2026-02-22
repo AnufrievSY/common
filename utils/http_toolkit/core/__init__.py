@@ -1,4 +1,5 @@
 import inspect
+from functools import wraps
 from typing import Any, Callable, Optional
 
 import httpx
@@ -12,9 +13,23 @@ import redis
 
 from . import types, utils, exceptions
 
+
 class Wrapper:
     """Базовый класс для обработки запросов к API"""
     response = None
+
+    @staticmethod
+    async def _to_coroutine(v):
+        return await v if inspect.isawaitable(v) else v
+
+    async def _get(self, k: str):
+        if hasattr(self.response, k):
+            v = getattr(self.response, k)
+            if inspect.isawaitable(v):
+                v = await v
+                setattr(self.response, k, self._to_coroutine(v))
+            return v
+        return None
 
     @property
     async def status(self) -> int:
@@ -25,31 +40,44 @@ class Wrapper:
             response = await response
         for key in ["status", "status_code"]:
             if hasattr(response, key):
-                return int(getattr(response, key))
+                return int(await self._get(key))
         raise ValueError(f"Статус запроса не найден или не прописан в ответе: {response.__dir__}")
 
-    async def execute(self, func: Callable[..., Any], *args, **kwargs): ...
+    async def execute(self, func: Callable[..., Any], *args, **kwargs):
+        ...
 
-    def wrap(self, func: Callable[..., Any], *args, **kwargs) -> httpx.Response:
+    def wrap(self, func: Callable[..., Any]):
+
+        # 1) Если func async — возвращаем async-обёртку (её надо await'ить)
         if asyncio.iscoroutinefunction(func):
-            answer = self.execute(func, *args, **kwargs)
-        else:
-            def _run():
-                loop = asyncio.new_event_loop()
-                try:
-                    asyncio.set_event_loop(loop)
-                    return loop.run_until_complete(self.execute(func, *args, **kwargs))
-                finally:
-                    loop.run_until_complete(loop.shutdown_asyncgens())
-                    loop.close()
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                features = executor.submit(_run)
-                answer = features.result()
+            @wraps(func)
+            async def awrapper(*args, **kwargs):
+                bound = inspect.signature(func).bind(*args, **kwargs)
+                bound.apply_defaults()
+                return await self.execute(func, *bound.args, **bound.kwargs)
 
-        async def to_coroutine(value):
-            return await value if inspect.isawaitable(value) else value
+            return awrapper
 
-        return to_coroutine(answer)
+        # 2) Если func sync — делаем гибрид:
+        #    - в sync-контексте вернём результат (через asyncio.run)
+        #    - в async-контексте вернём coroutine, которую надо await'ить
+        @wraps(func)
+        def swrapper(*args, **kwargs):
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                bound = inspect.signature(func).bind(*args, **kwargs)
+                bound.apply_defaults()
+                # loop НЕ запущен -> обычный sync-вызов
+                return asyncio.run(self.execute(func, *bound.args, **bound.kwargs))
+            else:
+                bound = inspect.signature(func).bind(*args, **kwargs)
+                bound.apply_defaults()
+                # loop УЖЕ запущен -> мы не можем блокировать
+                # возвращаем корутину (пусть вызывающий await-ит)
+                return self.execute(func, *bound.args, **bound.kwargs)
+
+        return swrapper
 
 
 class Redis:
