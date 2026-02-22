@@ -50,7 +50,11 @@ class Cache(Wrapper, Redis):
 
         _cache = self.client.get(key)
         if _cache:
-            return httpx.Response(**pickle.loads(_cache))
+            answer = httpx.Response(**pickle.loads(_cache))
+            if inspect.iscoroutinefunction(func):
+                _json = answer.json()
+                answer.json = lambda: self._to_coroutine(_json)
+            return answer
 
         answer = func(*args, **kwargs)
         if inspect.isawaitable(answer):
