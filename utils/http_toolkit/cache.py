@@ -62,9 +62,9 @@ class Cache(Wrapper, Redis):
         if status < 300:
             value = {'status_code': status}
 
-            value['json'] = await self.response.json() \
-                if inspect.isawaitable(self.response.json()) \
-                else self.response.json
+            data = self.response.json()
+
+            value['json'] = await data if inspect.isawaitable(data) else data
 
 
             value = pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
