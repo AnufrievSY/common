@@ -1,5 +1,6 @@
 from pathlib import Path
 from genson import SchemaBuilder
+from datamodel_code_generator import InputFileType, generate
 import json
 import yaml
 import pandas as pd
@@ -18,6 +19,15 @@ def json_to_schema(data, file_path: str | Path = "schema.json"):
     Path(file_path).parent.mkdir(parents=True, exist_ok=True)
     with open(str(file_path), "w") as f:
         json.dump(schema, f, indent=2)
+
+@has_extension(ext="py")
+def json_to_pydantic(data, file_path: str | Path = "model.py"):
+    """Конвертирует JSON в pydantic-модель"""
+    generate(
+        input_=data,
+        input_file_type=InputFileType.Dict,
+        output=Path(file_path),
+    )
 
 @has_extension(ext="json")
 def save_json(data: dict | list, file_path: str | Path):
